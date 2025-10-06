@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             foreach ($escuelas as $escuela) {
                 $precio = ($escuela == 'VII_INICIAL') ? $precio_inicial : $precio_avanzado;
                 
-                // Insertar inscripción
+                // 1. Insertar inscripción (sin cambios)
                 $sql_inscripcion = "INSERT INTO inscripciones (
                     participante_id, escuela, precio_modulo, fecha_inscripcion, activa
                 ) VALUES (?, ?, ?, NOW(), 1)";
@@ -101,15 +101,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt_inscripcion->bind_param("isd", $participante_id, $escuela, $precio);
                 $stmt_inscripcion->execute();
                 
-                // Crear estado de cuenta inicial
-                $sql_estado = "INSERT INTO estado_cuenta (
-                    participante_id, escuela, modulo_actual, 
-                    saldo_favor, total_pagado, total_adeudado
-                ) VALUES (?, ?, 1, 0, 0, ?)";
-                
-                $stmt_estado = $conexion->prepare($sql_estado);
-                $stmt_estado->bind_param("isd", $participante_id, $escuela, $precio);
-                $stmt_estado->execute();
+                // 2. CREAR ESTADO DE CUENTA con lógica de Inscripción Tardía (Requerimiento 9)
+                // Esto inicializa los módulos a partir del módulo actual del calendario, sin arrastrar deuda pasada.
+                if (!inicializarModulosInscripcionTardia($conexion, $participante_id, $escuela, $precio)) {
+                    throw new Exception("Error al inicializar módulos para la escuela: $escuela");
+                }
             }
             
             // Registrar actividad
