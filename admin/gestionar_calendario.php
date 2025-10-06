@@ -62,10 +62,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $calendario_seleccionado) {
                 $nombre_modulo = limpiarDato($datos['nombre_modulo']);
                 $arcangeles = limpiarDato($datos['arcangeles']);
                 
-                // Insertar o Actualizar módulo
-                // Usamos INSERT IGNORE si el índice ya existe para evitar errores, pero ON DUPLICATE KEY es más robusto.
-                $sql = "INSERT INTO modulos_escuela (calendario_id, escuela, numero_modulo, fecha_modulo, nombre_modulo, arcangeles, activo)
-                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                // *** FIX CRÍTICO: Eliminada la columna 'escuela' ***
+                $sql = "INSERT INTO modulos_escuela (calendario_id, numero_modulo, fecha_modulo, nombre_modulo, arcangeles, activo)
+                        VALUES (?, ?, ?, ?, ?, 1)
                         ON DUPLICATE KEY UPDATE 
                             fecha_modulo = VALUES(fecha_modulo),
                             nombre_modulo = VALUES(nombre_modulo),
@@ -73,8 +72,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $calendario_seleccionado) {
                             activo = 1";
                 
                 $stmt = $conexion->prepare($sql);
-                // Nota: Usamos $escuela_actual aquí.
-                $stmt->bind_param("iissss", $calendario_id, $escuela_actual, $num_modulo, $fecha_modulo, $nombre_modulo, $arcangeles);
+                // La variable $escuela_actual ya no se vincula
+                $stmt->bind_param("issss", $calendario_id, $num_modulo, $fecha_modulo, $nombre_modulo, $arcangeles);
                 
                 if (!$stmt->execute()) {
                     $exito = false;
