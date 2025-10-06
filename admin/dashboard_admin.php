@@ -477,6 +477,12 @@ $conexion->close();
                 </a>
             </li>
             <li>
+                <a href="gestionar_calendario.php">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Calendario de Módulos</span>
+                </a>
+            </li>
+            <li>
                 <a href="tasas.php">
                     <i class="fas fa-dollar-sign"></i>
                     <span>Tasas de Cambio</span>
