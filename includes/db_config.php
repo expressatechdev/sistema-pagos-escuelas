@@ -333,6 +333,7 @@ function mostrarMensaje($tipo, $mensaje) {
     </div>";
 }
 
+require_once dirname(__FILE__) . '/modulos_functions.php';
 // ====================================
 // TEST DE CONEXIÓN
 // ====================================
