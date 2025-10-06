@@ -68,9 +68,10 @@ if ($resultado->num_rows > 0) {
     $resultado_inscripciones = $stmt_inscripciones->get_result();
     
     while ($row = $resultado_inscripciones->fetch_assoc()) {
-        // Obtener estado de cuenta para cada escuela
-        $estado = obtenerEstadoCuenta($conexion, $participante_id, $row['escuela']);
-        $row['estado_cuenta'] = $estado;
+        // Obtener estado de cuenta COMPLETO con detalle por módulos
+        $estado_completo = obtenerEstadoCuentaCompleto($conexion, $participante_id, $row['escuela']);
+        $row['estado_cuenta'] = $estado_completo['resumen'];
+        $row['modulos_detalle'] = $estado_completo['modulos']; // NUEVO
         $inscripciones[] = $row;
     }
     
@@ -495,7 +496,7 @@ $conexion->close();
                         </div>
                         
                         <div class="detail-box">
-                            <div class="detail-label">Total Adeudado</div>
+                            <div class="detail-label">Total Pendiente</div>
                             <div class="detail-value debt"><?php echo formatearMoneda($total_adeudado); ?></div>
                         </div>
                     </div>
@@ -522,6 +523,105 @@ $conexion->close();
             <?php endif; ?>
         </div>
     </div>
+
+    <!-- ========== SECCIÓN NUEVA: Detalle por Módulos ========== -->
+    <?php if (!empty($inscripcion['modulos_detalle'])): ?>
+    <div class="modulos-detalle" style="margin-top: 20px; padding: 20px; background: white; border-radius: 10px;">
+        <h4 style="color: #333; margin-bottom: 20px; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">
+            <i class="fas fa-list-alt"></i> Detalle por Módulo
+        </h4>
+        
+        <?php foreach ($inscripcion['modulos_detalle'] as $modulo): 
+            $info_estado = formatearEstadoModulo($modulo['estado']);
+            $porcentaje_pagado = ($modulo['precio_modulo'] > 0) 
+                ? round(($modulo['total_pagado'] / $modulo['precio_modulo']) * 100) 
+                : 0;
+        ?>
+        <div class="modulo-item" style="
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid <?php echo $info_estado['color']; ?>;
+        ">
+            <!-- Icono del estado -->
+            <div style="flex: 0 0 60px; text-align: center; font-size: 24px;">
+                <?php echo $info_estado['icono']; ?>
+            </div>
+            
+            <!-- Info del módulo -->
+            <div style="flex: 1;">
+                <div style="font-weight: bold; color: #333; margin-bottom: 5px;">
+                    Módulo <?php echo $modulo['numero_modulo']; ?> 
+                    <?php if (!empty($modulo['nombre_modulo'])): ?>
+                        - <?php echo htmlspecialchars($modulo['nombre_modulo']); ?>
+                    <?php endif; ?>
+                </div>
+                
+                <?php if (!empty($modulo['arcangeles'])): ?>
+                <div style="font-size: 12px; color: #666; margin-bottom: 5px;">
+                    <i class="fas fa-star"></i> <?php echo htmlspecialchars($modulo['arcangeles']); ?>
+                </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($modulo['fecha_modulo'])): ?>
+                <div style="font-size: 11px; color: #999;">
+                    <i class="fas fa-calendar"></i> 
+                    <?php echo date('d/m/Y', strtotime($modulo['fecha_modulo'])); ?>
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Montos y estado -->
+            <div style="flex: 0 0 200px; text-align: right;">
+                <div style="margin-bottom: 5px;">
+                    <span style="
+                        display: inline-block;
+                        padding: 4px 12px;
+                        border-radius: 20px;
+                        font-size: 11px;
+                        font-weight: bold;
+                        color: white;
+                        background: <?php echo $info_estado['color']; ?>;
+                    ">
+                        <?php echo $info_estado['texto']; ?>
+                    </span>
+                </div>
+                
+                <div style="font-size: 14px; font-weight: bold; color: #333;">
+                    <?php echo formatearMoneda($modulo['total_pagado']); ?> / 
+                    <?php echo formatearMoneda($modulo['precio_modulo']); ?>
+                </div>
+                
+                <?php if ($modulo['total_pendiente'] > 0): ?>
+                <div style="font-size: 12px; color: #f44336; margin-top: 3px;">
+                    Pendiente: <?php echo formatearMoneda($modulo['total_pendiente']); ?>
+                </div>
+                <?php endif; ?>
+                
+                <!-- Barra de progreso -->
+                <div style="
+                    width: 100%;
+                    height: 6px;
+                    background: #e0e0e0;
+                    border-radius: 3px;
+                    margin-top: 8px;
+                    overflow: hidden;
+                ">
+                    <div style="
+                        height: 100%;
+                        width: <?php echo $porcentaje_pagado; ?>%;
+                        background: <?php echo $info_estado['color']; ?>;
+                        transition: width 0.3s ease;
+                    "></div>
+                </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
     
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
