@@ -2,7 +2,7 @@
 /**
  * FUNCIONES DE GESTIÓN DE MÓDULOS
  * Escuela del Sanador - Sistema de Pagos
- * V2.0 - Lógica de Calendario Flexible y Contabilidad Secuencial
+ * V2.1 - Lógica de Calendario Flexible y Contabilidad Secuencial (FIX: m.escuela error)
  */
 
 // ================================================================
@@ -41,8 +41,7 @@ function obtenerModuloActualCalendario($conexion, $escuela) {
  */
 function obtenerEstadoCuentaCompleto($conexion, $participante_id, $escuela) {
     // NOTA: La llamada al procedimiento de cálculo se realiza ahora
-    // en el evento de registro de pagos y en el módulo de inicialización,
-    // NO aquí, ya que el cálculo es complejo. Asumimos que los datos están al día.
+    // en el evento de registro de pagos y en el módulo de inicialización.
     
     // 1. Obtener resumen (estado_cuenta)
     $sql = "SELECT ec.*, i.precio_modulo
@@ -58,10 +57,11 @@ function obtenerEstadoCuentaCompleto($conexion, $participante_id, $escuela) {
     $stmt->close();
     
     // 2. Obtener detalle por módulos (estado_cuenta_modulos)
-    // Se agregan m.escuela a la unión, asumiendo que modulos_escuela tiene un campo 'escuela' o se vincula por calendario_id
+    // FIX del error: Unimos m.numero_modulo y c.escuela
     $sql_modulos = "SELECT ecm.*, m.nombre_modulo, m.arcangeles, m.fecha_modulo
                     FROM estado_cuenta_modulos ecm
-                    LEFT JOIN modulos_escuela m ON m.numero_modulo = ecm.numero_modulo AND m.escuela = ecm.escuela
+                    LEFT JOIN modulos_escuela m ON m.numero_modulo = ecm.numero_modulo
+                    INNER JOIN calendarios_escuelas c ON m.calendario_id = c.id AND c.escuela = ecm.escuela 
                     WHERE ecm.participante_id = ? AND ecm.escuela = ?
                     ORDER BY ecm.numero_modulo ASC";
     
@@ -87,19 +87,18 @@ function obtenerEstadoCuentaCompleto($conexion, $participante_id, $escuela) {
 }
 
 /**
- * Formatea el estado de un módulo con colores e iconos para la UI (Requerimiento 7)
+ * Formatea el estado de un módulo con colores e iconos para la UI
  * @param string $estado
  * @return array
  */
 function formatearEstadoModulo($estado) {
-    // Los estados son los que debe guardar el Procedimiento Almacenado
     $estados = [
         'INACTIVO' => ['texto' => 'Inscripción no activa', 'icono' => '🚫', 'color' => '#6c757d'],
         'NO_INICIADO' => ['texto' => 'No Iniciado', 'icono' => '⏳', 'color' => '#9E9E9E'],
-        'ADEUDO' => ['texto' => 'Pendiente Total', 'icono' => '❌', 'color' => '#f44336'], // Deuda total
-        'PARCIAL' => ['texto' => 'Pago Parcial', 'icono' => '⚠️', 'color' => '#ff9800'], // Deuda parcial
+        'ADEUDO' => ['texto' => 'Pendiente Total', 'icono' => '❌', 'color' => '#f44336'],
+        'PARCIAL' => ['texto' => 'Pago Parcial', 'icono' => '⚠️', 'color' => '#ff9800'],
         'PAGADO' => ['texto' => 'Pagado', 'icono' => '✅', 'color' => '#4CAF50'],
-        'VENCIDO' => ['texto' => 'Vencido', 'icono' => '🔴', 'color' => '#d32f2f'] // Se mantiene VENCIDO para claridad
+        'VENCIDO' => ['texto' => 'Vencido', 'icono' => '🔴', 'color' => '#d32f2f']
     ];
     
     return $estados[$estado] ?? ['texto' => $estado, 'icono' => '●', 'color' => '#666'];
@@ -119,10 +118,12 @@ function inicializarModulosInscripcionTardia($conexion, $participante_id, $escue
     $modulo_inicio = obtenerModuloActualCalendario($conexion, $escuela);
 
     // 2. Insertar solo los módulos a partir del Módulo de Inicio
-    $sql = "INSERT INTO estado_cuenta_modulos (participante_id, escuela, numero_modulo, precio_modulo, total_pagado, total_pendiente, estado)
+    // FIX del error: Unimos a través de calendarios_escuelas para evitar la columna m.escuela
+    $sql = "INSERT IGNORE INTO estado_cuenta_modulos (participante_id, escuela, numero_modulo, precio_modulo, total_pagado, total_pendiente, estado)
             SELECT ?, ?, m.numero_modulo, ?, 0, ?, 'NO_INICIADO'
             FROM modulos_escuela m
-            WHERE m.escuela = ?
+            INNER JOIN calendarios_escuelas c ON m.calendario_id = c.id
+            WHERE c.escuela = ?
               AND m.numero_modulo >= ?";
     
     $stmt = $conexion->prepare($sql);
@@ -144,10 +145,7 @@ function inicializarModulosInscripcionTardia($conexion, $participante_id, $escue
 }
 
 // ================================================================
-// FUNCIÓN OBSOLETA (sp_calcular_estado_cuenta) SE REMUEVE PARA USAR
-// SOLO EL NUEVO PROCEDIMIENTO SQL.
-// La función original inicializarEstadosCuentaExistentes TAMBIÉN es obsoleta,
-// ya que el nuevo procedimiento de aplicación actualiza la lógica.
+// La función original obtenerEstadoCuenta se mantiene en db_config.php
 // ================================================================
 
 ?>
