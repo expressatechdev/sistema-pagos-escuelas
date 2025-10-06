@@ -12,73 +12,96 @@ $conexion = conectarDB();
 $mensaje = '';
 $tipo_mensaje = '';
 
-// Obtener el calendario activo (asumimos el primer activo para simplificar)
-$sql_calendario = "SELECT id, escuela FROM calendarios_escuelas WHERE activo = 1 ORDER BY id ASC LIMIT 1";
-$resultado_calendario = $conexion->query($sql_calendario);
-
-if ($resultado_calendario->num_rows === 0) {
-    $mensaje = "No hay calendarios activos definidos. Debe crear uno en la base de datos.";
-    $tipo_mensaje = 'danger';
-    $calendario_activo = null;
-    $escuela_actual = '';
-    $calendario_id = 0;
-} else {
-    $calendario_activo = $resultado_calendario->fetch_assoc();
-    $escuela_actual = $calendario_activo['escuela'];
-    $calendario_id = $calendario_activo['id'];
+// 1. Obtener todos los calendarios activos
+$sql_calendarios = "SELECT id, escuela FROM calendarios_escuelas WHERE activo = 1 ORDER BY escuela";
+$resultado_calendarios = $conexion->query($sql_calendarios);
+$lista_calendarios = [];
+while ($row = $resultado_calendarios->fetch_assoc()) {
+    $lista_calendarios[] = $row;
 }
 
-// Procesar actualización de módulos
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $calendario_activo) {
-    $modulos = $_POST['modulos'] ?? [];
-    $conexion->begin_transaction();
-    $exito = true;
+// 2. Determinar qué calendario cargar (usar GET para selección, o el primero por defecto)
+$calendario_id_a_cargar = intval($_REQUEST['calendario_id'] ?? 0);
+$calendario_seleccionado = null;
 
-    try {
-        foreach ($modulos as $num_modulo => $datos) {
-            $fecha_modulo = limpiarDato($datos['fecha_modulo']);
-            $nombre_modulo = limpiarDato($datos['nombre_modulo']);
-            $arcangeles = limpiarDato($datos['arcangeles']);
-            
-            // Insertar o Actualizar módulo
-            $sql = "INSERT INTO modulos_escuela (calendario_id, escuela, numero_modulo, fecha_modulo, nombre_modulo, arcangeles, activo)
-                    VALUES (?, ?, ?, ?, ?, ?, 1)
-                    ON DUPLICATE KEY UPDATE 
-                        fecha_modulo = VALUES(fecha_modulo),
-                        nombre_modulo = VALUES(nombre_modulo),
-                        arcangeles = VALUES(arcangeles),
-                        activo = 1";
-            
-            $stmt = $conexion->prepare($sql);
-            // Nota: Aquí pasamos $escuela_actual para simular la columna 'escuela' que usamos en los JOINs para mayor simplicidad.
-            // Si la tabla modulos_escuela NO tiene columna 'escuela', debe cambiarse a NULL y los JOINs seguirán funcionando por calendario_id.
-            $stmt->bind_param("iissss", $calendario_id, $escuela_actual, $num_modulo, $fecha_modulo, $nombre_modulo, $arcangeles);
-            
-            if (!$stmt->execute()) {
-                $exito = false;
-                throw new Exception("Error al actualizar Módulo $num_modulo: " . $stmt->error);
-            }
+if ($calendario_id_a_cargar === 0 && !empty($lista_calendarios)) {
+    // Si no se especifica, carga el primero de la lista
+    $calendario_id_a_cargar = $lista_calendarios[0]['id'];
+}
+
+// 3. Cargar datos del calendario seleccionado
+if ($calendario_id_a_cargar > 0) {
+    foreach ($lista_calendarios as $cal) {
+        if ($cal['id'] === $calendario_id_a_cargar) {
+            $calendario_seleccionado = $cal;
+            break;
         }
-
-        if ($exito) {
-            $conexion->commit();
-            $mensaje = "Calendario de Módulos actualizado exitosamente para $escuela_actual.";
-            $tipo_mensaje = 'success';
-            
-            registrarActividad($conexion, 'admin', $_SESSION['usuario_id'], 
-                'ACTUALIZAR_CALENDARIO', "Calendario ID: $calendario_id ($escuela_actual) actualizado.");
-        }
-
-    } catch (Exception $e) {
-        $conexion->rollback();
-        $mensaje = "Error al guardar el calendario: " . $e->getMessage();
-        $tipo_mensaje = 'danger';
     }
 }
 
-// Obtener los módulos actuales
+// Inicialización de variables de contexto
+$escuela_actual = $calendario_seleccionado['escuela'] ?? '';
+$calendario_id = $calendario_id_a_cargar;
+
+
+// Procesar actualización de módulos
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $calendario_seleccionado) {
+    $modulos = $_POST['modulos'] ?? [];
+    
+    // Asegurar que estamos guardando para el calendario correcto, no para otro accidentalmente
+    if (intval($_POST['calendario_id_post']) !== $calendario_id) {
+         $mensaje = "Error de seguridad: ID de calendario incorrecto en el formulario.";
+         $tipo_mensaje = 'danger';
+    } else {
+        $conexion->begin_transaction();
+        $exito = true;
+
+        try {
+            foreach ($modulos as $num_modulo => $datos) {
+                $fecha_modulo = limpiarDato($datos['fecha_modulo']);
+                $nombre_modulo = limpiarDato($datos['nombre_modulo']);
+                $arcangeles = limpiarDato($datos['arcangeles']);
+                
+                // Insertar o Actualizar módulo
+                // Usamos INSERT IGNORE si el índice ya existe para evitar errores, pero ON DUPLICATE KEY es más robusto.
+                $sql = "INSERT INTO modulos_escuela (calendario_id, escuela, numero_modulo, fecha_modulo, nombre_modulo, arcangeles, activo)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                        ON DUPLICATE KEY UPDATE 
+                            fecha_modulo = VALUES(fecha_modulo),
+                            nombre_modulo = VALUES(nombre_modulo),
+                            arcangeles = VALUES(arcangeles),
+                            activo = 1";
+                
+                $stmt = $conexion->prepare($sql);
+                // Nota: Usamos $escuela_actual aquí.
+                $stmt->bind_param("iissss", $calendario_id, $escuela_actual, $num_modulo, $fecha_modulo, $nombre_modulo, $arcangeles);
+                
+                if (!$stmt->execute()) {
+                    $exito = false;
+                    throw new Exception("Error al actualizar Módulo $num_modulo: " . $stmt->error);
+                }
+            }
+
+            if ($exito) {
+                $conexion->commit();
+                $mensaje = "Calendario de Módulos actualizado exitosamente para $escuela_actual.";
+                $tipo_mensaje = 'success';
+                
+                registrarActividad($conexion, 'admin', $_SESSION['usuario_id'], 
+                    'ACTUALIZAR_CALENDARIO', "Calendario ID: $calendario_id ($escuela_actual) actualizado.");
+            }
+
+        } catch (Exception $e) {
+            $conexion->rollback();
+            $mensaje = "Error al guardar el calendario: " . $e->getMessage();
+            $tipo_mensaje = 'danger';
+        }
+    }
+}
+
+// Obtener los módulos actuales para la escuela seleccionada
 $modulos_db = [];
-if ($calendario_activo) {
+if ($calendario_seleccionado) {
     $sql_modulos = "SELECT numero_modulo, fecha_modulo, nombre_modulo, arcangeles
                     FROM modulos_escuela
                     WHERE calendario_id = ?
@@ -121,8 +144,24 @@ $conexion->close();
 <body>
     <div class="form-card">
         <div class="form-header">
-            <h2><i class="fas fa-calendar-alt"></i> Gestión de Calendario (<?php echo htmlspecialchars($escuela_actual ?? 'Sin Escuela'); ?>)</h2>
+            <h2><i class="fas fa-calendar-alt"></i> Gestión de Calendario</h2>
             <p>Define las fechas exactas, el nombre y los Arcángeles de los 9 módulos.</p>
+        </div>
+
+        <div class="mb-4">
+            <label for="select_calendario" class="form-label">Seleccionar Escuela/Calendario</label>
+            <select id="select_calendario" class="form-select" onchange="window.location.href='gestionar_calendario.php?calendario_id=' + this.value">
+                <?php if (empty($lista_calendarios)): ?>
+                    <option value="">No hay calendarios activos</option>
+                <?php else: ?>
+                    <?php foreach ($lista_calendarios as $cal): ?>
+                        <option value="<?php echo $cal['id']; ?>" 
+                                <?php echo $cal['id'] === $calendario_id ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($cal['escuela'] . ' (ID: ' . $cal['id'] . ')'); ?>
+                        </option>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </select>
         </div>
 
         <?php if($mensaje): ?>
@@ -132,12 +171,17 @@ $conexion->close();
             </div>
         <?php endif; ?>
 
-        <?php if ($calendario_activo): ?>
+        <?php if ($calendario_seleccionado): ?>
+            <h3 class="mb-3 text-primary"><?php echo htmlspecialchars($escuela_actual); ?></h3>
         <form method="POST" action="">
-            <input type="hidden" name="calendario_id" value="<?php echo $calendario_id; ?>">
+            <input type="hidden" name="calendario_id_post" value="<?php echo $calendario_id; ?>">
 
             <?php for ($i = 1; $i <= 9; $i++): 
-                $datos = $modulos_db[$i] ?? ['fecha_modulo' => '', 'nombre_modulo' => 'Módulo ' . $i, 'arcangeles' => ''];
+                $datos = $modulos_db[$i] ?? [
+                    'fecha_modulo' => '', 
+                    'nombre_modulo' => 'Módulo ' . $i, 
+                    'arcangeles' => ''
+                ];
             ?>
             <div class="module-row">
                 <h4>Módulo <?php echo $i; ?></h4>
@@ -178,6 +222,10 @@ $conexion->close();
                 </button>
             </div>
         </form>
+        <?php else: ?>
+             <div class="alert alert-warning text-center">
+                 <i class="fas fa-exclamation-triangle"></i> No se encontró un calendario activo para gestionar.
+             </div>
         <?php endif; ?>
 
         <div class="text-center mt-3">
