@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test JavaScript - Sistema de Pagos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .result {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success { background: #d4edda; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; border: 1px solid #bee5eb; }
+        input { width: 100%; padding: 10px; margin: 10px 0; }
+        button { background: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>🧪 Test de Envío de Token</h2>
+    <hr>
+    
+    <div id="console" class="result info">
+        <strong>Console Log:</strong>
+        <div id="log"></div>
+    </div>
+    
+    <form id="testForm">
+        <label>Email:</label>
+        <input type="email" id="email" value="gtomasifnew@gmail.com" required>
+        <button type="submit">Enviar Token (Test)</button>
+    </form>
+    
+    <div id="resultado"></div>
+    
+    <script>
+        // Capturar logs
+        const logDiv = document.getElementById('log');
+        function log(msg) {
+            logDiv.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${msg}</div>`;
+            console.log(msg);
+        }
+        
+        log('✅ JavaScript cargado correctamente');
+        
+        // Test del formulario
+        document.getElementById('testForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            log('📤 Formulario enviado, preventDefault() funcionó');
+            
+            const email = document.getElementById('email').value;
+            log(`📧 Email capturado: ${email}`);
+            
+            const resultDiv = document.getElementById('resultado');
+            resultDiv.innerHTML = '<div class="info">⏳ Enviando solicitud...</div>';
+            
+            try {
+                log('🔄 Iniciando fetch a api/enviar_token.php...');
+                
+                const response = await fetch('api/enviar_token.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ email: email })
+                });
+                
+                log(`📡 Respuesta recibida. Status: ${response.status}`);
+                
+                const data = await response.json();
+                log(`📦 JSON parseado: ${JSON.stringify(data)}`);
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `
+                        <div class="success">
+                            <h3>✅ ${data.message}</h3>
+                            ${data.debug_token ? `<p><strong>Token:</strong> ${data.debug_token}</p>` : ''}
+                        </div>
+                    `;
+                    log('✅ Token enviado exitosamente');
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <h3>❌ Error</h3>
+                            <p>${data.message}</p>
+                        </div>
+                    `;
+                    log(`❌ Error: ${data.message}`);
+                }
+                
+                // Mostrar respuesta completa
+                resultDiv.innerHTML += `
+                    <details style="margin-top: 10px;">
+                        <summary>Ver respuesta completa</summary>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    </details>
+                `;
+                
+            } catch (error) {
+                const errorMsg = `Error: ${error.message}`;
+                log(`❌ ${errorMsg}`);
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <h3>❌ Error de Conexión</h3>
+                        <p>${errorMsg}</p>
+                        <p><small>Verifica que la ruta api/enviar_token.php sea correcta</small></p>
+                    </div>
+                `;
+            }
+        });
+        
+        log('✅ Event listener agregado al formulario');
+    </script>
+</body>
+</html>
