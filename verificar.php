@@ -536,6 +536,8 @@ $conexion->close();
             $porcentaje_pagado = ($modulo['precio_modulo'] > 0) 
                 ? round(($modulo['total_pagado'] / $modulo['precio_modulo']) * 100) 
                 : 0;
+            // Asegurar que el porcentaje no exceda 100% (para anticipos o pagos extra)
+            $porcentaje_pagado = min($porcentaje_pagado, 100); 
         ?>
         <div class="modulo-item" style="
             display: flex;
@@ -545,14 +547,13 @@ $conexion->close();
             background: #f8f9fa;
             border-radius: 8px;
             border-left: 4px solid <?php echo $info_estado['color']; ?>;
+            flex-wrap: wrap; /* Permitir que los elementos se apilen en móvil */
         ">
-            <!-- Icono del estado -->
-            <div style="flex: 0 0 60px; text-align: center; font-size: 24px;">
+            <div style="flex: 0 0 60px; text-align: center; font-size: 24px; margin-right: 10px;">
                 <?php echo $info_estado['icono']; ?>
             </div>
             
-            <!-- Info del módulo -->
-            <div style="flex: 1;">
+            <div style="flex: 1 1 50%; min-width: 200px;">
                 <div style="font-weight: bold; color: #333; margin-bottom: 5px;">
                     Módulo <?php echo $modulo['numero_modulo']; ?> 
                     <?php if (!empty($modulo['nombre_modulo'])): ?>
@@ -569,13 +570,12 @@ $conexion->close();
                 <?php if (!empty($modulo['fecha_modulo'])): ?>
                 <div style="font-size: 11px; color: #999;">
                     <i class="fas fa-calendar"></i> 
-                    <?php echo date('d/m/Y', strtotime($modulo['fecha_modulo'])); ?>
+                    Vence: <?php echo date('d/m/Y', strtotime($modulo['fecha_modulo'])); ?>
                 </div>
                 <?php endif; ?>
             </div>
             
-            <!-- Montos y estado -->
-            <div style="flex: 0 0 200px; text-align: right;">
+            <div style="flex: 0 0 200px; text-align: right; margin-left: auto;">
                 <div style="margin-bottom: 5px;">
                     <span style="
                         display: inline-block;
@@ -601,7 +601,6 @@ $conexion->close();
                 </div>
                 <?php endif; ?>
                 
-                <!-- Barra de progreso -->
                 <div style="
                     width: 100%;
                     height: 6px;
@@ -623,7 +622,6 @@ $conexion->close();
     </div>
     <?php endif; ?>
     
-    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
