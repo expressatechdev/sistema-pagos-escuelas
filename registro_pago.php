@@ -65,6 +65,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $monto_dolares = $monto_original / $tasa_usada;
             break;
     }
+
+    // ✅ LÍNEAS AGREGADAS - REDONDEAR A 2 DECIMALES
+    $monto_dolares = round($monto_dolares, 2);
+    $monto_original = round($monto_original, 2);
+    if ($tasa_usada !== null) {
+        $tasa_usada = round($tasa_usada, 2);
+    }
     
     // Validaciones
     $errores = [];
